@@ -26,10 +26,12 @@ main(int argc, char *argv[])
   check_data(blocks, blk, block_size);
 
   disk_fail_raid(2);
+  disk_fail_raid(3);
 
-  check_data(blocks, blk, block_size);
+ // check_data(blocks, blk, block_size);
 
-  disk_repaired_raid(2);
+  printf("disk_repaired_raid(2): %d", disk_repaired_raid(2));
+  printf("disk_repaired_raid(3): %d", disk_repaired_raid(3));
 
   check_data(blocks, blk, block_size);
 

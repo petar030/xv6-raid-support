@@ -9,12 +9,16 @@
 // MAIN RAID FUNCTIONS
 struct raid_meta{
     enum RAID_TYPE type;
-    int exists;
+    int exists; //(1)==exists ; (-1)==doesn't exist ; (0)==not clear
 };
 static struct raid_meta raid_info = {0, 0};
 int check_raid() {
+
+
     if (raid_info.exists == 1) return 0;
     if (raid_info.exists == -1) return -1;
+    
+    //If exists == 0 it is not clear if raid exists so we need to check for all raids
     if (check_raid1() == 0) {
         set_raid(RAID1);
         printf("RAID1 FOUND\n");
@@ -208,10 +212,13 @@ void clone_disk(int disk_src, int disk_dst){
     }
 
 }
+
+
+
 struct uni_raid_meta
 {
     enum RAID_TYPE type;
-    uchar status;
+    uchar status; //1==working ; 0==broken
     uint num_of_blocks;
     uchar raid_set;
 };
