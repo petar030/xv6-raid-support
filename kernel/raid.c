@@ -3,9 +3,22 @@
 #include "memlayout.h"
 #include "riscv.h"
 #include "spinlock.h"
+#include "sleeplock.h"
 #include "proc.h"
 #include "defs.h"
 #include "fs.h"
+// SPINLOCK 
+struct sleeplock raid_lock;
+static int raid_lock_inited = 0;
+
+static void raid_lock_init(void) {
+  if (!raid_lock_inited) {
+    initsleeplock(&raid_lock, "raid_lock");
+    raid_lock_inited = 1;
+  }
+}
+
+
 // MAIN RAID FUNCTIONS
 struct raid_meta{
     enum RAID_TYPE type;
@@ -56,134 +69,282 @@ void reset_raid() {
     raid_info.exists = -1;
 }
 int init_raid(enum RAID_TYPE raid) {
-    if (raid < 0 || raid > 5) return -1;
-    switch (raid) {
-    case RAID1:
-        return init_raid1();
-    case RAID0:
-        return init_raid0();
-    case RAID0_1:
-        return init_raid0_1();
-    case RAID4:
-        return init_raid4();
-    case RAID5:
-        return init_raid5();
-    default:
-        return -1;
+    raid_lock_init();
+    acquiresleep(&raid_lock);
+    //printf("raid_lock acquired in init_raid\n");
+
+    int ret = -1;
+    if (raid < 0 || raid > 5) {
+        ret = -1;
+    } else {
+        switch (raid) {
+        case RAID1:
+            ret = init_raid1();
+            break;
+        case RAID0:
+            ret = init_raid0();
+            break;
+        case RAID0_1:
+            ret = init_raid0_1();
+            break;
+        case RAID4:
+            ret = init_raid4();
+            break;
+        case RAID5:
+            ret = init_raid5();
+            break;
+        default:
+            ret = -1;
+            break;
+        }
     }
+
+    //printf("raid_lock releasing in init_raid\n");
+    releasesleep(&raid_lock);
+    return ret;
 }
+
 enum RAID_TYPE raid_type() {
     // This function can be called only if raid exists
     return raid_info.type;
 }
+
+
+
 int read_raid(int blkn, uchar *data) {
-    if (check_raid() != 0) return -1;
-    enum RAID_TYPE raid = raid_type();
-    switch (raid) {
-    case RAID0:
-        return read_raid0(blkn, data);
-    case RAID1:
-        return read_raid1(blkn, data);
-    case RAID0_1:
-        return read_raid0_1(blkn, data);
-    case RAID4:
-        return read_raid4(blkn, data);
-    case RAID5:
-        return read_raid5(blkn, data);
-    default:
+    raid_lock_init();
+    acquiresleep(&raid_lock);
+    //printf("raid_lock acquired in read_raid\n");
+
+    if (check_raid() != 0) {
+        //printf("raid_lock releasing in read_raid (check_raid failed)\n");
+        releasesleep(&raid_lock);
         return -1;
     }
-}
-int write_raid(int blkn, uchar *data) {
-    if (check_raid() != 0) return -1;
+
     enum RAID_TYPE raid = raid_type();
+    int ret = -1;
     switch (raid) {
     case RAID0:
-        return write_raid0(blkn, data);
+        ret = read_raid0(blkn, data);
+        break;
     case RAID1:
-        return write_raid1(blkn, data);
+        ret = read_raid1(blkn, data);
+        break;
     case RAID0_1:
-        return write_raid0_1(blkn, data);
+        ret = read_raid0_1(blkn, data);
+        break;
     case RAID4:
-        return write_raid4(blkn, data);
+        ret = read_raid4(blkn, data);
+        break;
     case RAID5:
-        return write_raid5(blkn, data);
+        ret = read_raid5(blkn, data);
+        break;
     default:
+        ret = -1;
+        break;
+    }
+
+    //printf("raid_lock releasing in read_raid\n");
+    releasesleep(&raid_lock);
+    return ret;
+}
+
+int write_raid(int blkn, uchar *data) {   
+     raid_lock_init();
+    acquiresleep(&raid_lock);
+    //printf("raid_lock acquired in write_raid\n");
+
+    if (check_raid() != 0) {
+        //printf("raid_lock releasing in write_raid (check_raid failed)\n");
+        releasesleep(&raid_lock);
         return -1;
     }
+
+    enum RAID_TYPE raid = raid_type();
+    int ret = -1;
+    switch (raid) {
+    case RAID0:
+        ret = write_raid0(blkn, data);
+        break;
+    case RAID1:
+        ret = write_raid1(blkn, data);
+        break;
+    case RAID0_1:
+        ret = write_raid0_1(blkn, data);
+        break;
+    case RAID4:
+        ret = write_raid4(blkn, data);
+        break;
+    case RAID5:
+        ret = write_raid5(blkn, data);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
+    //printf("raid_lock releasing in write_raid\n");
+    releasesleep(&raid_lock);
+    return ret;
 }
+
 int disk_fail_raid(int diskn) {
-    if (check_raid() != 0) return -1;
-    enum RAID_TYPE raid = raid_type();
-    switch (raid) {
-    case RAID0:
-        return disk_fail_raid0(diskn);
-    case RAID1:
-        return disk_fail_raid1(diskn);
-    case RAID0_1:
-        return disk_fail_raid0_1(diskn);
-    case RAID4:
-        return disk_fail_raid4(diskn);
-    case RAID5:
-        return disk_fail_raid5(diskn);
-    default:
+        raid_lock_init();
+    acquiresleep(&raid_lock);
+    //printf("raid_lock acquired in disk_fail_raid\n");
+
+    if (check_raid() != 0) {
+        //printf("raid_lock releasing in disk_fail_raid (check_raid failed)\n");
+        releasesleep(&raid_lock);
         return -1;
     }
+
+    enum RAID_TYPE raid = raid_type();
+    int ret = -1;
+    switch (raid) {
+    case RAID0:
+        ret = disk_fail_raid0(diskn);
+        break;
+    case RAID1:
+        ret = disk_fail_raid1(diskn);
+        break;
+    case RAID0_1:
+        ret = disk_fail_raid0_1(diskn);
+        break;
+    case RAID4:
+        ret = disk_fail_raid4(diskn);
+        break;
+    case RAID5:
+        ret = disk_fail_raid5(diskn);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
+    //printf("raid_lock releasing in disk_fail_raid\n");
+    releasesleep(&raid_lock);
+    return ret;
 }
+
 int disk_repaired_raid(int diskn) {
-    if (check_raid() != 0) return -1;
-    enum RAID_TYPE raid = raid_type();
-    switch (raid) {
-    case RAID0:
-        return disk_repaired_raid0(diskn);
-    case RAID1:
-        return disk_repaired_raid1(diskn);
-    case RAID0_1:
-        return disk_repaired_raid0_1(diskn);
-    case RAID4:
-        return disk_repaired_raid4(diskn);
-    case RAID5:
-        return disk_repaired_raid5(diskn);
-    default:
+    raid_lock_init();
+    acquiresleep(&raid_lock);
+    //printf("raid_lock acquired in disk_repaired_raid\n");
+
+    if (check_raid() != 0) {
+        //printf("raid_lock releasing in disk_repaired_raid (check_raid failed)\n");
+        releasesleep(&raid_lock);
         return -1;
     }
+
+    enum RAID_TYPE raid = raid_type();
+    int ret = -1;
+    switch (raid) {
+    case RAID0:
+        ret = disk_repaired_raid0(diskn);
+        break;
+    case RAID1:
+        ret = disk_repaired_raid1(diskn);
+        break;
+    case RAID0_1:
+        ret = disk_repaired_raid0_1(diskn);
+        break;
+    case RAID4:
+        ret = disk_repaired_raid4(diskn);
+        break;
+    case RAID5:
+        ret = disk_repaired_raid5(diskn);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
+    //printf("raid_lock releasing in disk_repaired_raid\n");
+    releasesleep(&raid_lock);
+    return ret;
 }
+
 int info_raid(uint *blkn, uint *blks, uint *diskn) {
-    if (check_raid() != 0) return -1;
-    enum RAID_TYPE raid = raid_type();
-    switch (raid) {
-    case RAID0:
-        return info_raid0(blkn, blks, diskn);
-    case RAID1:
-        return info_raid1(blkn, blks, diskn);
-    case RAID0_1:
-        return info_raid0_1(blkn, blks, diskn);
-    case RAID4:
-        return info_raid4(blkn, blks, diskn);
-    case RAID5:
-        return info_raid5(blkn, blks, diskn);
-    default:
+    raid_lock_init();
+    acquiresleep(&raid_lock);
+    //printf("raid_lock acquired in info_raid\n");
+
+    if (check_raid() != 0) {
+        //printf("raid_lock releasing in info_raid (check_raid failed)\n");
+        releasesleep(&raid_lock);
         return -1;
     }
+
+    enum RAID_TYPE raid = raid_type();
+    int ret = -1;
+    switch (raid) {
+    case RAID0:
+        ret = info_raid0(blkn, blks, diskn);
+        break;
+    case RAID1:
+        ret = info_raid1(blkn, blks, diskn);
+        break;
+    case RAID0_1:
+        ret = info_raid0_1(blkn, blks, diskn);
+        break;
+    case RAID4:
+        ret = info_raid4(blkn, blks, diskn);
+        break;
+    case RAID5:
+        ret = info_raid5(blkn, blks, diskn);
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
+    //printf("raid_lock releasing in info_raid\n");
+    releasesleep(&raid_lock);
+    return ret;
 }
+
 int destroy_raid() {
-    if (check_raid() != 0) return -1;
-    enum RAID_TYPE raid = raid_type();
-    switch (raid) {
-    case RAID0:
-        return destroy_raid0();
-    case RAID1:
-        return destroy_raid1();
-    case RAID0_1:
-        return destroy_raid0_1();
-    case RAID4:
-        return destroy_raid4();
-    case RAID5:
-        return destroy_raid5();
-    default:
+    raid_lock_init();
+    acquiresleep(&raid_lock);
+    //printf("raid_lock acquired in destroy_raid\n");
+
+    if (check_raid() != 0) {
+        //printf("raid_lock releasing in destroy_raid (check_raid failed)\n");
+        releasesleep(&raid_lock);
         return -1;
     }
+
+    enum RAID_TYPE raid = raid_type();
+    int ret = -1;
+    switch (raid) {
+    case RAID0:
+        ret = destroy_raid0();
+        break;
+    case RAID1:
+        ret = destroy_raid1();
+        break;
+    case RAID0_1:
+        ret = destroy_raid0_1();
+        break;
+    case RAID4:
+        ret = destroy_raid4();
+        break;
+    case RAID5:
+        ret = destroy_raid5();
+        break;
+    default:
+        ret = -1;
+        break;
+    }
+
+    //printf("raid_lock releasing in destroy_raid\n");
+    releasesleep(&raid_lock);
+    return ret;
 }
+
 void serialize(void *data, uchar *buffer, int size)
 {
     if (size > BSIZE)
@@ -204,14 +365,18 @@ void deserialize(uchar *buffer, void *data, int size)
         ptr[i] = buffer[i];
     }
 }
-void clone_disk(int disk_src, int disk_dst){
+void clone_disk(int disk_src, int disk_dst) {
     uchar buffer[BSIZE];
-    for(int i = 0;i < NUM_OF_BLOCKS;i++){
+
+
+    for (int i = 0; i < NUM_OF_BLOCKS; i++) {
         read_block(disk_src, i, buffer);
         write_block(disk_dst, i, buffer);
+        printf("KLONIRANJE BLOKA %d\n", i);
     }
 
 }
+
 
 
 
@@ -242,18 +407,21 @@ void load_cache(){
 
     cache_loaded = 1;
 }
-uchar rstatus(int diskn){
+uchar rstatus(int diskn) {
     load_cache();
-    return metadata_cache[diskn-1].status;
+    uchar ret = metadata_cache[diskn - 1].status;
+    return ret;
 }
-void wstatus(int diskn, uchar status){
+
+void wstatus(int diskn, uchar status) {
     load_cache();
-    metadata_cache[diskn-1].status = status;
+    metadata_cache[diskn - 1].status = status;
     uchar buffer[BSIZE];
     int size_of_metadata = sizeof(struct uni_raid_meta);
-    serialize(&metadata_cache[diskn-1], buffer, size_of_metadata);
+    serialize(&metadata_cache[diskn - 1], buffer, size_of_metadata);
     write_block(diskn, 0, buffer);
 }
+
 // RAID1 FUNCTIONS 
 int init_raid1()
 {      
